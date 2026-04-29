@@ -1,0 +1,31 @@
+<Teleport to="body">
+  <div
+    v-if="open"
+    class="route-panel-backdrop"
+    role="presentation"
+    @click.self="$emit('close')"
+  ></div>
+</Teleport>
+<Teleport to="body">
+  <div
+    v-if="open"
+    class="route-panel"
+    :class="panelClass"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="titleId"
+  >
+    <div class="route-panel-header">
+      <h2 :id="titleId">{{ title }}</h2>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost route-panel-close"
+        aria-label="Close dialog"
+        @click="$emit('close')"
+      >
+        Close
+      </button>
+    </div>
+    <slot></slot>
+  </div>
+</Teleport>

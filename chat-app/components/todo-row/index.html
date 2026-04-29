@@ -1,0 +1,45 @@
+<li class="todo-row" :class="{ 'todo-row--done': model.completed }">
+  <label class="todo-check-wrap" :for="'todo-done-' + model.id">
+    <span class="sr-only">Done</span>
+    <input
+      :id="'todo-done-' + model.id"
+      class="todo-check"
+      type="checkbox"
+      :checked="model.completed"
+      @change="$emit('patch', { completed: $event.target.checked })"
+    />
+  </label>
+  <input
+    :id="'todo-title-' + model.id"
+    class="todo-title-field"
+    type="text"
+    :value="model.title"
+    placeholder="Task title"
+    autocomplete="off"
+    @input="$emit('patch', { title: $event.target.value })"
+  />
+  <label class="sr-only" :for="'todo-due-' + model.id">Due date</label>
+  <input
+    :id="'todo-due-' + model.id"
+    class="todo-due-field"
+    type="date"
+    :value="model.due || ''"
+    @input="$emit('patch', { due: $event.target.value })"
+  />
+  <button
+    type="button"
+    class="btn btn-sm btn-secondary todo-upload-btn"
+    disabled
+    title="Cloud upload (coming soon)"
+    aria-label="Cloud upload (coming soon)"
+  >
+    <span class="todo-upload-icon" aria-hidden="true">☁</span>
+  </button>
+  <button
+    type="button"
+    class="btn btn-danger btn-sm todo-delete-btn"
+    @click="$emit('remove')"
+  >
+    Delete
+  </button>
+</li>

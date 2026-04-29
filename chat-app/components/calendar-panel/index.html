@@ -1,0 +1,22 @@
+<p class="calendar-month-label">{{ calendarMonthLabel }}</p>
+<table class="calendar-grid" :aria-label="calendarMonthLabel">
+  <thead>
+    <tr>
+      <th v-for="d in calendarWeekdayLabels" :key="d" scope="col">
+        {{ d }}
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr v-for="(week, wi) in calendarWeeks" :key="wi">
+      <td
+        v-for="(cell, ci) in week"
+        :key="ci"
+        :class="{ 'is-outside': cell.outside, 'is-today': cell.today }"
+      >
+        {{ cell.day }}
+      </td>
+    </tr>
+  </tbody>
+</table>
+<p class="hint route-panel-hint">Month view for this group (local UI only).</p>

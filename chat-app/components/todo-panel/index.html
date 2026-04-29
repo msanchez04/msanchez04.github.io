@@ -1,0 +1,29 @@
+<div class="todo-panel">
+  <p class="hint route-panel-hint todo-panel-hint">
+    Tasks stay in this browser session only (not synced on Graffiti).
+  </p>
+  <div class="todo-scroll">
+    <div v-if="items.length" class="todo-col-head" aria-hidden="true">
+      <span class="todo-col-done-label">Done</span>
+      <span>Task</span>
+      <span>Due</span>
+      <span class="todo-col-head-upload">Cloud</span>
+      <span></span>
+    </div>
+    <ul class="todo-list">
+      <TodoRow
+        v-for="(item, i) in items"
+        :key="item.id"
+        :model="item"
+        @patch="$emit('patchTodo', { index: i, patch: $event })"
+        @remove="$emit('remove', i)"
+      />
+    </ul>
+    <p v-if="!items.length" class="hint todo-empty">No tasks yet. Add one below.</p>
+  </div>
+  <div class="todo-footer">
+    <button type="button" class="btn btn-secondary todo-add-btn" @click="$emit('add')">
+      Add new task
+    </button>
+  </div>
+</div>

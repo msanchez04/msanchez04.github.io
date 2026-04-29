@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Class project groups</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "vue": "https://cdn.jsdelivr.net/npm/vue@3.5.32/dist/vue.esm-browser.js",
+          "vue-router": "https://cdn.jsdelivr.net/npm/vue-router@5.0.4/dist/vue-router.esm-browser.prod.js",
+          "@graffiti-garden/implementation-decentralized": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-decentralized@0.0.9/dist/browser/index.js",
+          "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@1.2.2/dist/browser/plugin.mjs"
+        }
+      }
+    </script>
+    <script src="index.js" type="module"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">Loading…</div>
+    <template id="template">
+      <header class="app-header">
+        <h1>
+          <router-link class="app-title-link" :to="{ name: 'home' }"
+            >Project Groups</router-link
+          >
+        </h1>
+        <div class="header-actions">
+          <template v-if="!$graffitiSession.value">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              @click="$graffiti.login()"
+            >
+              Log in
+            </button>
+          </template>
+          <template v-else>
+            <span class="header-account" title="Current Graffiti account">
+              <graffiti-actor-to-handle :actor="$graffitiSession.value.actor" />
+            </span>
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary"
+              @click="$graffiti.logout($graffitiSession.value)"
+            >
+              Log out
+            </button>
+          </template>
+        </div>
+      </header>
+
+      <template v-if="!$graffitiSession.value">
+        <div class="login-panel">
+          <p>
+            Sign in with Graffiti. You will only see project groups where your
+            actor ID is on the access list (added when the group was created or
+            by the creator later).
+          </p>
+          <button type="button" class="btn" @click="$graffiti.login()">
+            Log in to continue
+          </button>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="layout">
+          <aside class="sidebar" aria-label="Project groups">
+            <div class="sidebar-header">
+              <div class="tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="listFilter === 'all'"
+                  @click="listFilter = 'all'"
+                >
+                  All projects
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="listFilter === 'mine'"
+                  @click="listFilter = 'mine'"
+                >
+                  My projects
+                </button>
+              </div>
+              <p>
+                <strong>Group Chats</strong>
+              </p>
+            </div>
+
+            <div class="sidebar-scroll">
+              <div
+                class="loading-inline"
+                :aria-busy="directoryLoading || membershipLoading"
+              >
+                <template v-if="directoryLoading || membershipLoading">
+                  Loading groups…
+                </template>
+              </div>
+
+              <ul class="chat-list" role="list">
+                <li v-for="p of visibleProjects" :key="p.value.channel">
+                  <button
+                    type="button"
+                    :class="{ 'is-active': p.value.channel === selectedChannel }"
+                    @click="selectProject(p)"
+                  >
+                    {{ p.value.title }}
+                    <span class="meta">
+                      {{ p.value.course }}
+                      <template v-if="joinedChannels.has(p.value.channel)">
+                        · in your list
+                      </template>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+              <p
+                v-if="!directoryLoading && !membershipLoading && !visibleProjects.length"
+                class="hint sidebar-empty-hint"
+              >
+                <template v-if="listFilter === 'mine'">
+                  No groups here yet. Join a chat from
+                  <strong>All projects</strong>
+                  (that pins it here), or create a group below.
+                </template>
+                <template v-else>
+                  No groups you can access yet. Ask a teammate to add your
+                  Graffiti handle (or <code>did:</code> id), or create a group
+                  and list people below.
+                </template>
+              </p>
+            </div>
+
+            <div class="panel">
+              <h3>Start a new group</h3>
+              <form @submit.prevent="createProject()">
+                <label for="proj-title">Project name</label>
+                <input
+                  id="proj-title"
+                  v-model="newTitle"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="e.g. HW10 collision branch"
+                  required
+                />
+                <label for="proj-course">Class</label>
+                <input
+                  id="proj-course"
+                  v-model="newCourse"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="6.4500"
+                />
+                <label for="proj-members">Who can see this group</label>
+                <p class="hint" id="members-hint">
+                  One person per line: a <strong>handle</strong> like
+                  <code>friend.graffiti.actor</code>, or a short name
+                  <code>friend</code> (we append <code>.graffiti.actor</code>),
+                  or a full <code>did:plc:…</code> id (letter
+                  <strong>l</strong> as in “PLC”, not “place”). Listed accounts
+                  can discover the group; they still use
+                  <strong>Join project chat</strong> to load messages.
+                </p>
+                <textarea
+                  id="proj-members"
+                  v-model="newMembersRaw"
+                  aria-describedby="members-hint"
+                  placeholder="friend.graffiti.actor"
+                ></textarea>
+                <button
+                  type="submit"
+                  class="btn"
+                  :disabled="!newTitle.trim() || isCreatingProject"
+                >
+                  {{ isCreatingProject ? "Creating…" : "Create group" }}
+                </button>
+              </form>
+            </div>
+          </aside>
+
+          <section class="main" aria-live="polite">
+            <template v-if="!selectedChannel">
+              <div class="main-empty">
+                <div>
+                  <p><strong>Select a project group</strong></p>
+                  <p class="hint" style="margin: 0.5rem 0 0">
+                    If a teammate added your handle or <code>did:</code> id,
+                    their group appears in the sidebar. Start your own group
+                    from the form below.
+                  </p>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="thread-sheet">
+                <p
+                  v-if="selectedChannel && !selectedProject"
+                  class="hint"
+                  style="
+                    margin: 0;
+                    padding: 0.75rem 1.25rem;
+                    background: #fff8e6;
+                  "
+                >
+                  This project is no longer in the directory (it may have been
+                  deleted). You can still read older messages here, but you
+                  cannot post.
+                </p>
+                <div class="thread-header">
+                  <div>
+                    <h2>{{ selectedProject?.value.title ?? 'Group' }}</h2>
+                    <div class="course">
+                      Class {{ selectedProject?.value.course ?? '—' }}
+                    </div>
+                    <div v-if="selectedProject" class="thread-creator">
+                      Started by
+                      <graffiti-actor-to-handle
+                        :actor="selectedProject.actor"
+                      />
+                    </div>
+                    <div class="status-pill live">Live sync</div>
+                  </div>
+                  <div v-if="selectedChannel" class="thread-actions">
+                    <router-link
+                      class="btn btn-sm btn-secondary"
+                      :to="{
+                        name: 'chat-todos',
+                        params: { chatId: selectedChannel },
+                      }"
+                    >
+                      To-do list
+                    </router-link>
+                    <router-link
+                      class="btn btn-sm btn-secondary"
+                      :to="{
+                        name: 'chat-calendar',
+                        params: { chatId: selectedChannel },
+                      }"
+                    >
+                      Calendar
+                    </router-link>
+                    <button
+                      v-if="selectedProject && isOnAccessListForSelected && !isMemberOfSelected"
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      :disabled="isJoining"
+                      @click="joinProject()"
+                    >
+                      {{ isJoining ? "Joining…" : "Join project chat" }}
+                    </button>
+                    <button
+                      v-if="selectedProject && isMemberOfSelected"
+                      type="button"
+                      class="btn btn-danger btn-sm"
+                      :disabled="isLeaving"
+                      @click="leaveProject()"
+                    >
+                      {{ isLeaving ? "Unpinning…" : "Unpin from My projects" }}
+                    </button>
+                    <button
+                      v-if="selectedProject && isCreatorOfSelected"
+                      type="button"
+                      class="btn btn-danger btn-sm"
+                      :disabled="isDeletingGroup"
+                      @click="deleteEntireGroup()"
+                    >
+                      {{ isDeletingGroup ? "Deleting…" : "Delete group" }}
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="selectedProject" class="roster-panel">
+                  <h3 class="roster-title">Access list</h3>
+                  <p class="hint roster-explainer">
+                    These accounts are listed for this app (and for private
+                    <strong>messages</strong>). Each person must still
+                    <strong>Join project chat</strong> before message history
+                    loads.
+                  </p>
+                  <ul v-if="selectedAllowedActors.length" class="roster-list">
+                    <li
+                      v-for="actorId in selectedAllowedActors"
+                      :key="actorId"
+                      class="roster-row"
+                    >
+                      <span class="roster-id">
+                        <template v-if="String(actorId).startsWith('did:')">
+                          <graffiti-actor-to-handle :actor="actorId" />
+                        </template>
+                        <code v-else class="roster-raw">{{ actorId }}</code>
+                      </span>
+                      <button
+                        v-if="isRosterRowRemovable(actorId)"
+                        type="button"
+                        class="btn btn-danger btn-sm roster-remove"
+                        :disabled="isAddingMember"
+                        @click="removeActorFromAccessList(actorId)"
+                      >
+                        <template v-if="isAddingMember">…</template>
+                        <template v-else>Remove</template>
+                      </button>
+                    </li>
+                  </ul>
+                  <div v-if="isCreatorOfSelected" class="add-member-box">
+                    <label for="add-member-id" class="add-member-label"
+                      >Add someone (handle or did:…)</label
+                    >
+                    <div class="add-member-row">
+                      <input
+                        id="add-member-id"
+                        v-model="newMemberActorId"
+                        type="text"
+                        autocomplete="off"
+                        placeholder="friend.graffiti.actor"
+                      />
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        :disabled="isAddingMember || !newMemberActorId.trim()"
+                        @click="addMemberToGroup()"
+                      >
+                        {{ isAddingMember ? "Updating…" : "Add to access list"
+                        }}
+                      </button>
+                    </div>
+                    <p class="hint" style="margin: 0.35rem 0 0">
+                      Updates republish the group directory row. New invitees
+                      see the project after sync; use
+                      <strong>Remove</strong> beside a name to revoke access
+                      (you cannot remove yourself as creator).
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  ref="messagesEl"
+                  class="messages"
+                  :aria-busy="messagesLoading"
+                >
+                  <template
+                    v-if="selectedProject && isOnAccessListForSelected && !isMemberOfSelected"
+                  >
+                    <div class="join-gate">
+                      <p>
+                        <strong>Join this project chat</strong> to load message
+                        history and take part in the room.
+                      </p>
+                      <p class="hint">
+                        You are on the access list, but older messages stay
+                        hidden until you enter.
+                      </p>
+                      <button
+                        type="button"
+                        class="btn"
+                        :disabled="isJoining"
+                        @click="joinProject()"
+                      >
+                        {{ isJoining ? "Joining…" : "Join project chat" }}
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else-if="!selectedProject && selectedChannel">
+                    <p class="hint">
+                      This project is no longer listed. Message objects may
+                      still exist on the network for people who already joined
+                      this chat.
+                    </p>
+                  </template>
+                  <template v-else-if="messagesLoading">
+                    <p class="loading-inline">Loading messages…</p>
+                  </template>
+                  <template v-else>
+                    <template v-if="!sortedMessages.length">
+                      <p v-if="canSendMessages" class="hint">
+                        No messages yet. Say hello below.
+                      </p>
+                      <p v-else class="hint">No messages yet.</p>
+                    </template>
+                    <div
+                      v-for="m of sortedMessages"
+                      :key="m.url"
+                      class="bubble-row"
+                      :class="{ mine: m.actor === $graffitiSession.value?.actor }"
+                    >
+                      <div class="bubble">
+                        <div class="author">
+                          <graffiti-actor-to-handle :actor="m.actor" />
+                        </div>
+                        {{ m.value.content }}
+                      </div>
+                      <div
+                        v-if="m.actor === $graffitiSession.value?.actor"
+                        class="msg-actions"
+                      >
+                        <button
+                          type="button"
+                          class="btn btn-danger btn-sm"
+                          :disabled="isDeleting.has(m.url)"
+                          @click="deleteMessage(m)"
+                        >
+                          <template v-if="isDeleting.has(m.url)"
+                            >Removing…</template
+                          >
+                          <template v-else>Remove message</template>
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <div
+                  v-if="fakeTypingVisible && canSendMessages"
+                  class="fake-typing"
+                  aria-hidden="true"
+                >
+                  Someone might be typing… (placeholder)
+                </div>
+
+                <div
+                  class="composer"
+                  :class="{ 'composer-locked': !canSendMessages }"
+                >
+                  <template v-if="!canSendMessages">
+                    <p
+                      v-if="!selectedProject"
+                      class="hint"
+                      style="margin: 0 0 0.65rem"
+                    >
+                      Posting is turned off because this project is no longer in
+                      the directory.
+                    </p>
+                    <p
+                      v-else-if="isOnAccessListForSelected && !isMemberOfSelected"
+                      class="hint"
+                      style="margin: 0 0 0.65rem"
+                    >
+                      <strong>Join project chat</strong> (button above or in the
+                      timeline) to read and send messages.
+                    </p>
+                    <p v-else class="hint" style="margin: 0 0 0.65rem">
+                      Your account is not on this group's access list. Ask the
+                      creator to add your <strong>handle</strong> (or
+                      <code>did:</code> id) with
+                      <strong>Add to access list</strong>.
+                    </p>
+                  </template>
+                  <form @submit.prevent="sendMessage()">
+                    <label class="sr-only" for="msg-input">Message</label>
+                    <textarea
+                      id="msg-input"
+                      v-model="draftMessage"
+                      placeholder="Write a message…"
+                      :disabled="!canSendMessages"
+                      @keydown.enter.exact.prevent="canSendMessages && sendMessage()"
+                      @input="onComposerInput()"
+                    ></textarea>
+                    <button
+                      type="submit"
+                      class="btn"
+                      :disabled="!canSendMessages || !draftMessage.trim() || isSendingMessage"
+                    >
+                      {{ isSendingMessage ? "Sending…" : "Send" }}
+                    </button>
+                  </form>
+                  <p
+                    v-if="canSendMessages"
+                    class="hint"
+                    style="margin: 0.5rem 0 0"
+                  >
+                    Enter sends the message. Use Shift+Enter for a new line.
+                  </p>
+                </div>
+              </div>
+            </template>
+          </section>
+        </div>
+
+        <!-- In-DOM templates: use kebab-case so the browser’s lowercase tags map to components -->
+        <routed-modal-shell
+          v-if="routePanel === 'todos'"
+          :open="true"
+          :title="'To-do — ' + (selectedProject?.value.title ?? 'this chat')"
+          :title-id="'todo-title-' + selectedChannel"
+          panel-class="route-panel-todo"
+          @close="closeRoutePanel()"
+        >
+          <todo-panel
+            :items="selectedTodos"
+            @add="addTodoForSelected()"
+            @patch-todo="patchTodoAt($event)"
+            @remove="removeTodoAt($event)"
+          />
+        </routed-modal-shell>
+
+        <routed-modal-shell
+          v-if="routePanel === 'calendar'"
+          :open="true"
+          :title="'Calendar — ' + (selectedProject?.value.title ?? 'this chat')"
+          title-id="calendar-panel-title"
+          panel-class="route-panel-calendar"
+          @close="closeRoutePanel()"
+        >
+          <calendar-panel />
+        </routed-modal-shell>
+      </template>
+    </template>
+  </body>
+</html>
