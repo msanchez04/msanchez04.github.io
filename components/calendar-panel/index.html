@@ -1,22 +1,112 @@
-<p class="calendar-month-label">{{ calendarMonthLabel }}</p>
-<table class="calendar-grid" :aria-label="calendarMonthLabel">
-  <thead>
-    <tr>
-      <th v-for="d in calendarWeekdayLabels" :key="d" scope="col">
-        {{ d }}
-      </th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr v-for="(week, wi) in calendarWeeks" :key="wi">
-      <td
-        v-for="(cell, ci) in week"
-        :key="ci"
-        :class="{ 'is-outside': cell.outside, 'is-today': cell.today }"
-      >
-        {{ cell.day }}
-      </td>
-    </tr>
-  </tbody>
-</table>
-<p class="hint route-panel-hint">Month view for this group (local UI only).</p>
+<form class="calendar-app-form" @submit.prevent="addEvent()">
+  <label for="calendar-new-title">Add to personal app calendar</label>
+  <div class="calendar-app-row">
+    <input
+      id="calendar-new-title"
+      v-model="newEventTitle"
+      type="text"
+      autocomplete="off"
+      placeholder="Event title"
+    />
+    <input id="calendar-new-date" v-model="newEventDate" type="date" />
+    <button type="submit" class="btn btn-sm btn-secondary">Add event</button>
+  </div>
+</form>
+
+<p class="hint route-panel-hint calendar-app-help">
+  This is your personal in-app calendar. Tasks with a title and due date sync
+  here automatically.
+</p>
+
+<div class="calendar-month-nav">
+  <button type="button" class="btn btn-sm btn-secondary" @click="prevMonth()">
+    ←
+  </button>
+  <strong class="calendar-month-title">{{ monthTitle }}</strong>
+  <button type="button" class="btn btn-sm btn-secondary" @click="nextMonth()">
+    →
+  </button>
+  <select
+    class="calendar-month-select"
+    :value="activeMonth.getMonth()"
+    aria-label="Filter by month"
+    @change="setMonthFromSelect($event.target.value)"
+  >
+    <option v-for="(label, idx) in monthOptions" :key="label" :value="idx">
+      {{ label }}
+    </option>
+  </select>
+  <select
+    class="calendar-year-select"
+    :value="activeMonth.getFullYear()"
+    aria-label="Filter by year"
+    @change="setYearFromSelect($event.target.value)"
+  >
+    <option v-for="y in yearOptions" :key="y" :value="y">
+      {{ y }}
+    </option>
+  </select>
+  <button type="button" class="btn btn-sm btn-ghost" @click="goToToday()">
+    Today
+  </button>
+</div>
+
+<div class="calendar-grid-head">
+  <span v-for="d in weekdayLabels" :key="d">{{ d }}</span>
+</div>
+<div class="calendar-month-grid">
+  <button
+    v-for="cell in calendarCells"
+    :key="cell.key"
+    type="button"
+    class="calendar-day-cell"
+    :class="{
+      'is-outside': !cell.inMonth,
+      'is-today': cell.isToday,
+      'is-selected': cell.isSelected,
+    }"
+    @click="selectDate(cell.key)"
+  >
+    <span class="calendar-day-num">{{ cell.day }}</span>
+    <span v-if="cell.events.length" class="calendar-day-count">
+      {{ cell.events.length }} task{{ cell.events.length > 1 ? "s" : "" }}
+    </span>
+  </button>
+</div>
+
+<div class="calendar-selected-day">
+  <strong>{{ selectedDateLabel }}</strong>
+</div>
+
+<ul v-if="selectedEvents.length" class="calendar-event-list" role="list">
+  <li v-for="ev in selectedEvents" :key="ev.id" class="calendar-event-row">
+    <input
+      class="calendar-event-title"
+      type="text"
+      :value="ev.title"
+      @input="$emit('patchEvent', { index: ev.index, patch: { title: $event.target.value } })"
+    />
+    <input
+      class="calendar-event-date"
+      type="date"
+      :value="ev.due"
+      @input="$emit('patchEvent', { index: ev.index, patch: { due: $event.target.value } })"
+    />
+    <span class="calendar-event-preview">{{ formatDate(ev.due) }}</span>
+    <button
+      type="button"
+      class="btn btn-danger btn-sm calendar-event-remove"
+      @click="$emit('removeEvent', ev.index)"
+    >
+      Delete
+    </button>
+  </li>
+</ul>
+
+<div v-else class="calendar-app-empty">
+  <p><strong>No events on this day.</strong></p>
+  <p class="hint">
+    Add an event above, or add/update a task with title and due date in the
+    to-do list to sync it here automatically.
+  </p>
+</div>

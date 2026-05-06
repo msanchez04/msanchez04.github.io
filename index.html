@@ -68,7 +68,7 @@
         <div class="layout">
           <aside class="sidebar" aria-label="Project groups">
             <div class="sidebar-header">
-              <div class="tabs" role="tablist">
+              <div class="tabs tabs-three" role="tablist">
                 <button
                   type="button"
                   role="tab"
@@ -85,14 +85,24 @@
                 >
                   My projects
                 </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="listFilter === 'tasks'"
+                  @click="listFilter = 'tasks'"
+                >
+                  All tasks
+                </button>
               </div>
               <p>
-                <strong>Group Chats</strong>
+                <strong v-if="listFilter !== 'tasks'">Group chats</strong>
+                <strong v-else>Tasks across groups</strong>
               </p>
             </div>
 
             <div class="sidebar-scroll">
               <div
+                v-if="listFilter !== 'tasks'"
                 class="loading-inline"
                 :aria-busy="directoryLoading || membershipLoading"
               >
@@ -101,7 +111,11 @@
                 </template>
               </div>
 
-              <ul class="chat-list" role="list">
+              <ul
+                v-if="listFilter !== 'tasks'"
+                class="chat-list"
+                role="list"
+              >
                 <li v-for="p of visibleProjects" :key="p.value.channel">
                   <button
                     type="button"
@@ -111,32 +125,132 @@
                     {{ p.value.title }}
                     <span class="meta">
                       {{ p.value.course }}
-                      <template v-if="joinedChannels.has(p.value.channel)">
-                        · in your list
+                      <template v-if="pinnedChannels.has(p.value.channel)">
+                        · in My projects
                       </template>
                     </span>
                   </button>
                 </li>
               </ul>
+              <ul
+                v-else
+                class="tasks-sidebar-list"
+                role="list"
+              >
+                <li
+                  v-for="row in allTodosSidebar"
+                  :key="row.task.id + '-' + row.channel"
+                  class="tasks-sidebar-item"
+                >
+                  <div class="tasks-sidebar-row">
+                    <input
+                      type="checkbox"
+                      class="tasks-sidebar-check"
+                      :checked="row.task.completed"
+                      :aria-label="'Done: ' + (row.task.title || 'task')"
+                      @change="
+                        patchTodoForChannel(row.channel, row.index, {
+                          completed: $event.target.checked,
+                        })
+                      "
+                    />
+                    <div class="tasks-sidebar-main">
+                      <span
+                        class="tasks-sidebar-title"
+                        :class="{ 'is-done': row.task.completed }"
+                        >{{ row.task.title || "(No title)" }}</span
+                      >
+                      <span
+                        v-if="row.task.due"
+                        class="tasks-sidebar-due"
+                      >Due {{ row.task.due }}</span>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-secondary tasks-sidebar-open"
+                      :class="{ 'is-opening': navigatingTaskChannel === row.channel }"
+                      :disabled="navigatingTaskChannel === row.channel"
+                      title="Open chat"
+                      @click="openChatFromTaskSidebar(row.channel)"
+                    >
+                      {{
+                        navigatingTaskChannel === row.channel
+                          ? "Opening…"
+                          : "Open"
+                      }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-danger btn-sm tasks-sidebar-del"
+                      title="Delete task"
+                      @click="removeTodoForChannel(row.channel, row.index)"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div class="tasks-sidebar-project">
+                    {{ row.projectTitle }} · {{ row.course }}
+                  </div>
+                </li>
+              </ul>
               <p
-                v-if="!directoryLoading && !membershipLoading && !visibleProjects.length"
+                v-if="
+                  listFilter !== 'tasks' &&
+                  !directoryLoading &&
+                  !membershipLoading &&
+                  !visibleProjects.length
+                "
                 class="hint sidebar-empty-hint"
               >
                 <template v-if="listFilter === 'mine'">
                   No groups here yet. Join a chat from
                   <strong>All projects</strong>
-                  (that pins it here), or create a group below.
+                  (that pins it here), or use <strong>Make chat</strong> to
+                  create one.
                 </template>
                 <template v-else>
                   No groups you can access yet. Ask a teammate to add your
-                  Graffiti handle (or <code>did:</code> id), or create a group
-                  and list people below.
+                  Graffiti handle (or <code>did:</code> id), or use
+                  <strong>Make chat</strong> to list people and create a group.
                 </template>
+              </p>
+              <p
+                v-if="listFilter === 'tasks' && !allTodosSidebar.length"
+                class="hint sidebar-empty-hint"
+              >
+                No tasks yet. Open a group, use <strong>To-do list</strong>, and
+                add tasks—they will show up here across all projects.
               </p>
             </div>
 
-            <div class="panel">
-              <h3>Start a new group</h3>
+            <div class="sidebar-make-chat">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                :aria-expanded="showCreateGroupPanel"
+                aria-controls="create-group-panel"
+                @click="showCreateGroupPanel = true"
+              >
+                Make chat
+              </button>
+            </div>
+
+            <transition name="create-panel">
+              <div
+                v-if="showCreateGroupPanel"
+                id="create-group-panel"
+                class="panel panel-create-group"
+              >
+              <div class="panel-create-header">
+                <h3>Start a new group</h3>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-secondary panel-create-cancel"
+                  @click="showCreateGroupPanel = false"
+                >
+                  Cancel
+                </button>
+              </div>
               <form @submit.prevent="createProject()">
                 <label for="proj-title">Project name</label>
                 <input
@@ -179,7 +293,8 @@
                   {{ isCreatingProject ? "Creating…" : "Create group" }}
                 </button>
               </form>
-            </div>
+              </div>
+            </transition>
           </aside>
 
           <section class="main" aria-live="polite">
@@ -190,7 +305,7 @@
                   <p class="hint" style="margin: 0.5rem 0 0">
                     If a teammate added your handle or <code>did:</code> id,
                     their group appears in the sidebar. Start your own group
-                    from the form below.
+                    with <strong>Make chat</strong> in the sidebar.
                   </p>
                 </div>
               </div>
@@ -227,7 +342,7 @@
                   </div>
                   <div v-if="selectedChannel" class="thread-actions">
                     <router-link
-                      class="btn btn-sm btn-secondary"
+                      class="btn btn-sm btn-secondary thread-route-btn"
                       :to="{
                         name: 'chat-todos',
                         params: { chatId: selectedChannel },
@@ -236,7 +351,7 @@
                       To-do list
                     </router-link>
                     <router-link
-                      class="btn btn-sm btn-secondary"
+                      class="btn btn-sm btn-secondary thread-route-btn"
                       :to="{
                         name: 'chat-calendar',
                         params: { chatId: selectedChannel },
@@ -254,13 +369,26 @@
                       {{ isJoining ? "Joining…" : "Join project chat" }}
                     </button>
                     <button
-                      v-if="selectedProject && isMemberOfSelected"
+                      v-if="selectedProject && isMemberOfSelected && isPinnedForSelected"
                       type="button"
                       class="btn btn-danger btn-sm"
                       :disabled="isLeaving"
-                      @click="leaveProject()"
+                      @click="unpinFromMyProjects()"
                     >
                       {{ isLeaving ? "Unpinning…" : "Unpin from My projects" }}
+                    </button>
+                    <button
+                      v-if="selectedProject && isMemberOfSelected && !isPinnedForSelected"
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      :disabled="isPinningSidebar"
+                      @click="pinToMyProjects()"
+                    >
+                      {{
+                        isPinningSidebar
+                          ? "Pinning…"
+                          : "Pin to My projects"
+                      }}
                     </button>
                     <button
                       v-if="selectedProject && isCreatorOfSelected"
@@ -414,14 +542,6 @@
                 </div>
 
                 <div
-                  v-if="fakeTypingVisible && canSendMessages"
-                  class="fake-typing"
-                  aria-hidden="true"
-                >
-                  Someone might be typing… (placeholder)
-                </div>
-
-                <div
                   class="composer"
                   :class="{ 'composer-locked': !canSendMessages }"
                 >
@@ -457,7 +577,6 @@
                       placeholder="Write a message…"
                       :disabled="!canSendMessages"
                       @keydown.enter.exact.prevent="canSendMessages && sendMessage()"
-                      @input="onComposerInput()"
                     ></textarea>
                     <button
                       type="submit"
@@ -505,7 +624,12 @@
           panel-class="route-panel-calendar"
           @close="closeRoutePanel()"
         >
-          <calendar-panel />
+          <calendar-panel
+            :events="personalCalendarEvents"
+            @add-event="addCalendarEvent($event)"
+            @patch-event="patchCalendarEvent($event)"
+            @remove-event="removeCalendarEvent($event)"
+          />
         </routed-modal-shell>
       </template>
     </template>

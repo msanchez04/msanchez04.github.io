@@ -80,7 +80,9 @@ const membershipSchema = {
     value: {
       required: ["activity", "target", "published"],
       properties: {
-        activity: { enum: ["Join", "Leave"] },
+        activity: {
+          enum: ["Join", "Leave", "Pin", "Unpin"],
+        },
         target: { type: "string" },
         published: { type: "number" },
       },
@@ -182,6 +184,8 @@ function setup() {
   const router = useRouter();
 
   const listFilter = ref("all");
+  /** Sidebar “Start a new group” form hidden until Make chat is clicked */
+  const showCreateGroupPanel = ref(false);
   const selectedChannel = ref(null);
   const messagesEl = ref(null);
 
@@ -197,6 +201,8 @@ function setup() {
   const isSendingMessage = ref(false);
   const isJoining = ref(false);
   const isLeaving = ref(false);
+  const isPinningSidebar = ref(false);
+  const navigatingTaskChannel = ref(null);
   const isDeletingGroup = ref(false);
   const isDeleting = ref(new Set());
 
@@ -222,16 +228,21 @@ function setup() {
         newMemberActorId.value = "";
         selectedChannel.value = null;
         aclDirectoryPlaceholder.value = null;
+        showCreateGroupPanel.value = false;
         void router.replace({ name: "home" });
       }
     },
   );
 
-  const fakeTypingVisible = ref(false);
-  let fakeTypingTimer;
-
-  /** @type {Record<string, Array<{ id: string, title: string, due: string, completed: boolean }>>} */
+  /**
+   * Per-chat tasks (local only):
+   * - due uses yyyy-mm-dd (date input format)
+   * - syncedCalendarEventId links a task row to a personal calendar event
+   */
+  /** @type {Record<string, Array<{ id: string, title: string, due: string, completed: boolean, syncedCalendarEventId?: string | null }>>} */
   const todoLinesByChannel = reactive({});
+  /** Personal app calendar events for the logged-in account (local only). */
+  const personalCalendarEvents = ref([]);
 
   const routePanel = computed(() => {
     if (route.name === "chat-todos") return "todos";
@@ -265,12 +276,19 @@ function setup() {
           title: e,
           due: "",
           completed: false,
+          syncedCalendarEventId: null,
         };
       } else if (e && typeof e === "object") {
         if (!e.id) e.id = crypto.randomUUID();
         if (typeof e.title !== "string") e.title = "";
         if (typeof e.due !== "string") e.due = "";
         if (typeof e.completed !== "boolean") e.completed = false;
+        if (
+          typeof e.syncedCalendarEventId !== "string" &&
+          e.syncedCalendarEventId !== null
+        ) {
+          e.syncedCalendarEventId = null;
+        }
       }
     }
     return list;
@@ -286,22 +304,257 @@ function setup() {
       title: "",
       due: "",
       completed: false,
+      syncedCalendarEventId: null,
     });
+  }
+
+  function sortCalendarEvents() {
+    personalCalendarEvents.value.sort((a, b) => {
+      const da = a.due || "9999-12-31";
+      const db = b.due || "9999-12-31";
+      if (da !== db) return da < db ? -1 : 1;
+      const ta = (a.title || "").toLowerCase();
+      const tb = (b.title || "").toLowerCase();
+      return ta.localeCompare(tb);
+    });
+  }
+
+  function calendarStorageKeyForActor(actor) {
+    return `chatapp.personal-calendar.${canonicalActorId(actor || "anon")}`;
+  }
+
+  function todoStorageKeyForActor(actor) {
+    return `chatapp.todos.${canonicalActorId(actor || "anon")}`;
+  }
+
+  function resetTodosInMemory() {
+    for (const key of Object.keys(todoLinesByChannel)) {
+      delete todoLinesByChannel[key];
+    }
+  }
+
+  function sanitizeTodosByChannel(raw) {
+    if (!raw || typeof raw !== "object") return {};
+    const out = {};
+    for (const [channel, rows] of Object.entries(raw)) {
+      if (!Array.isArray(rows) || !channel) continue;
+      out[channel] = rows
+        .map((e) => {
+          if (!e || typeof e !== "object") return null;
+          const title = String(e.title ?? "");
+          const due = String(e.due ?? "");
+          const synced = e.syncedCalendarEventId;
+          return {
+            id: typeof e.id === "string" && e.id ? e.id : crypto.randomUUID(),
+            title,
+            due,
+            completed: !!e.completed,
+            syncedCalendarEventId:
+              typeof synced === "string" || synced === null ? synced : null,
+          };
+        })
+        .filter(Boolean);
+    }
+    return out;
+  }
+
+  function loadTodosForActor(actor) {
+    resetTodosInMemory();
+    if (!actor) return;
+    try {
+      const raw = localStorage.getItem(todoStorageKeyForActor(actor));
+      const parsed = raw ? JSON.parse(raw) : {};
+      const normalized = sanitizeTodosByChannel(parsed);
+      for (const [channel, rows] of Object.entries(normalized)) {
+        todoLinesByChannel[channel] = rows;
+      }
+    } catch {
+      // Ignore storage parse errors; user starts with empty task state.
+    }
+  }
+
+  function sanitizeCalendarEvents(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const e of raw) {
+      if (!e || typeof e !== "object") continue;
+      const title = String(e.title ?? "").trim();
+      const due = String(e.due ?? "");
+      if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(due)) continue;
+      out.push({
+        id: typeof e.id === "string" && e.id ? e.id : crypto.randomUUID(),
+        title,
+        due,
+      });
+    }
+    return out;
+  }
+
+  function loadPersonalCalendarForActor(actor) {
+    if (!actor) {
+      personalCalendarEvents.value = [];
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(calendarStorageKeyForActor(actor));
+      const parsed = raw ? JSON.parse(raw) : [];
+      personalCalendarEvents.value = sanitizeCalendarEvents(parsed);
+      sortCalendarEvents();
+    } catch {
+      personalCalendarEvents.value = [];
+    }
+  }
+
+  watch(
+    () => session.value?.actor,
+    (actor) => loadPersonalCalendarForActor(actor),
+    { immediate: true },
+  );
+
+  watch(
+    () => session.value?.actor,
+    (actor) => loadTodosForActor(actor),
+    { immediate: true },
+  );
+
+  watch(
+    personalCalendarEvents,
+    (next) => {
+      const actor = session.value?.actor;
+      if (!actor) return;
+      try {
+        localStorage.setItem(calendarStorageKeyForActor(actor), JSON.stringify(next));
+      } catch {
+        // Ignore localStorage failures.
+      }
+    },
+    { deep: true },
+  );
+
+  watch(
+    todoLinesByChannel,
+    (next) => {
+      const actor = session.value?.actor;
+      if (!actor) return;
+      try {
+        localStorage.setItem(todoStorageKeyForActor(actor), JSON.stringify(next));
+      } catch {
+        // Ignore localStorage failures.
+      }
+    },
+    { deep: true },
+  );
+
+  function addCalendarEvent({ title, due }) {
+    const t = String(title ?? "").trim();
+    const d = String(due ?? "");
+    if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+    personalCalendarEvents.value.push({
+      id: crypto.randomUUID(),
+      title: t,
+      due: d,
+    });
+    sortCalendarEvents();
+  }
+
+  function patchCalendarEvent({ index, patch }) {
+    if (!patch || typeof index !== "number") return;
+    const list = personalCalendarEvents.value;
+    if (index < 0 || index >= list.length) return;
+    const next = { ...list[index], ...patch };
+    next.title = String(next.title ?? "").trim();
+    next.due = String(next.due ?? "");
+    if (!next.title || !/^\d{4}-\d{2}-\d{2}$/.test(next.due)) return;
+    list[index] = next;
+    sortCalendarEvents();
+  }
+
+  function removeCalendarEvent(index) {
+    if (typeof index !== "number") return;
+    if (index < 0 || index >= personalCalendarEvents.value.length) return;
+    const removed = personalCalendarEvents.value[index];
+    personalCalendarEvents.value.splice(index, 1);
+    for (const channel of Object.keys(todoLinesByChannel)) {
+      const rows = todoListFor(channel);
+      for (const task of rows) {
+        if (task.syncedCalendarEventId === removed?.id) {
+          task.syncedCalendarEventId = null;
+        }
+      }
+    }
+  }
+
+  /** Keep task <-> personal calendar event in sync automatically. */
+  function autosyncTaskToCalendar(channel, index) {
+    if (!channel || typeof index !== "number") return;
+    const list = todoListFor(channel);
+    if (index < 0 || index >= list.length) return;
+    const task = list[index];
+    const title = String(task.title ?? "").trim();
+    const due = String(task.due ?? "");
+    const existingIdx = personalCalendarEvents.value.findIndex(
+      (e) => e.id === task.syncedCalendarEventId,
+    );
+    const valid = !!title && /^\d{4}-\d{2}-\d{2}$/.test(due);
+
+    // If task no longer has required fields, remove prior synced event link.
+    if (!valid) {
+      if (existingIdx >= 0) {
+        personalCalendarEvents.value.splice(existingIdx, 1);
+        sortCalendarEvents();
+      }
+      task.syncedCalendarEventId = null;
+      return;
+    }
+
+    if (existingIdx >= 0) {
+      personalCalendarEvents.value[existingIdx] = {
+        ...personalCalendarEvents.value[existingIdx],
+        title,
+        due,
+      };
+    } else {
+      const newEventId = crypto.randomUUID();
+      personalCalendarEvents.value.push({ id: newEventId, title, due });
+      task.syncedCalendarEventId = newEventId;
+    }
+    sortCalendarEvents();
+  }
+
+  function patchTodoForChannel(channel, index, patch) {
+    if (!channel || !patch || typeof index !== "number") return;
+    const list = todoListFor(channel);
+    if (index < 0 || index >= list.length) return;
+    Object.assign(list[index], patch);
+    autosyncTaskToCalendar(channel, index);
+  }
+
+  function removeTodoForChannel(channel, index) {
+    if (!channel) return;
+    const list = todoListFor(channel);
+    if (index >= 0 && index < list.length) {
+      const task = list[index];
+      const existingIdx = personalCalendarEvents.value.findIndex(
+        (e) => e.id === task?.syncedCalendarEventId,
+      );
+      if (existingIdx >= 0) {
+        personalCalendarEvents.value.splice(existingIdx, 1);
+        sortCalendarEvents();
+      }
+      list.splice(index, 1);
+    }
   }
 
   function patchTodoAt({ index, patch }) {
     const ch = selectedChannel.value;
-    if (!ch || !patch || typeof index !== "number") return;
-    const list = todoListFor(ch);
-    if (index < 0 || index >= list.length) return;
-    Object.assign(list[index], patch);
+    if (!ch) return;
+    patchTodoForChannel(ch, index, patch);
   }
 
   function removeTodoAt(index) {
     const ch = selectedChannel.value;
     if (!ch) return;
-    const list = todoListFor(ch);
-    if (index >= 0 && index < list.length) list.splice(index, 1);
+    removeTodoForChannel(ch, index);
   }
 
   function closeRoutePanel() {
@@ -382,22 +635,61 @@ function setup() {
       true,
     );
 
-  /** Latest activity per chat channel from private Join / Leave posts */
-  const membershipByChannel = computed(() => {
-    const map = new Map();
-    const sorted = membershipObjects.value.toSorted(
+  const sortedMembershipPosts = computed(() =>
+    membershipObjects.value.toSorted(
       (a, b) => a.value.published - b.value.published,
-    );
-    for (const o of sorted) {
-      map.set(o.value.target, o.value.activity);
+    ),
+  );
+
+  /** Latest Join vs Leave per channel (message room / timeline). */
+  const joinLeaveByChannel = computed(() => {
+    const map = new Map();
+    for (const o of sortedMembershipPosts.value) {
+      const act = o.value.activity;
+      if (act === "Join" || act === "Leave") {
+        map.set(o.value.target, act);
+      }
+    }
+    return map;
+  });
+
+  /** Latest Pin vs Unpin per channel (sidebar “My projects”). */
+  const pinUnpinByChannel = computed(() => {
+    const map = new Map();
+    for (const o of sortedMembershipPosts.value) {
+      const act = o.value.activity;
+      if (act === "Pin" || act === "Unpin") {
+        map.set(o.value.target, act);
+      }
     }
     return map;
   });
 
   const joinedChannels = computed(() => {
     const set = new Set();
-    for (const [ch, act] of membershipByChannel.value) {
+    for (const [ch, act] of joinLeaveByChannel.value) {
       if (act === "Join") set.add(ch);
+    }
+    return set;
+  });
+
+  /**
+   * Pinned to “My projects”: explicit Pin/Unpin wins; legacy data with only
+   * Join (no pin markers) treats Join as pinned until the user Unpins.
+   */
+  const pinnedChannels = computed(() => {
+    const set = new Set();
+    const pmap = pinUnpinByChannel.value;
+    const jmap = joinLeaveByChannel.value;
+    const channels = new Set([...pmap.keys(), ...jmap.keys()]);
+    for (const ch of channels) {
+      const pu = pmap.get(ch);
+      if (pu === "Pin") {
+        set.add(ch);
+        continue;
+      }
+      if (pu === "Unpin") continue;
+      if (jmap.get(ch) === "Join") set.add(ch);
     }
     return set;
   });
@@ -515,14 +807,50 @@ function setup() {
 
   const visibleProjects = computed(() => {
     if (listFilter.value === "mine") {
-      return sortedProjectsForSidebar.value.filter(
-        (p) =>
-          joinedChannels.value.has(p.value.channel) ||
-          canonicalActorId(p.actor) ===
-            canonicalActorId(session.value?.actor ?? ""),
+      /** Only chats explicitly pinned for this account (creator included). */
+      return sortedProjectsForSidebar.value.filter((p) =>
+        pinnedChannels.value.has(p.value.channel),
       );
     }
     return sortedProjectsForSidebar.value;
+  });
+
+  /** Every task row from every channel with project labels (sidebar “All tasks”). */
+  const allTodosSidebar = computed(() => {
+    const rows = [];
+    for (const channel of Object.keys(todoLinesByChannel)) {
+      const list = todoListFor(channel);
+      if (!list.length) continue;
+      const proj = latestProjectByChannel.value.get(channel);
+      const projectTitle = proj?.value?.title ?? "Group";
+      const course = proj?.value?.course ?? "—";
+      for (let i = 0; i < list.length; i++) {
+        const task = list[i];
+        const title = String(task?.title ?? "").trim();
+        if (!title) continue;
+        rows.push({
+          channel,
+          index: i,
+          task,
+          projectTitle,
+          course,
+        });
+      }
+    }
+    rows.sort((a, b) => {
+      if (a.task.completed !== b.task.completed) {
+        return a.task.completed ? 1 : -1;
+      }
+      const da = a.task.due || "9999-12-31";
+      const db = b.task.due || "9999-12-31";
+      if (da !== db) return da < db ? -1 : da > db ? 1 : 0;
+      const ta = (a.task.title || "").toLowerCase();
+      const tb = (b.task.title || "").toLowerCase();
+      const c = ta.localeCompare(tb);
+      if (c !== 0) return c;
+      return a.projectTitle.localeCompare(b.projectTitle);
+    });
+    return rows;
   });
 
   const selectedProject = computed(() => {
@@ -547,7 +875,13 @@ function setup() {
       : false,
   );
 
-  /** On ACL and has opened the chat (pin / join) — same gate as reading messages. */
+  const isPinnedForSelected = computed(() =>
+    selectedChannel.value
+      ? pinnedChannels.value.has(selectedChannel.value)
+      : false,
+  );
+
+  /** On ACL and has opened the chat (Join) — same gate as reading messages. */
   const canSendMessages = computed(() => {
     if (!selectedProject.value || !session.value || !selectedChannel.value) {
       return false;
@@ -635,6 +969,7 @@ function setup() {
       }
       newTitle.value = "";
       newMembersRaw.value = "";
+      showCreateGroupPanel.value = false;
       await router.push({ name: "chat", params: { chatId: channel } });
       const joined = await joinProject();
       if (!joined) {
@@ -678,9 +1013,28 @@ function setup() {
     }
   }
 
-  /** @returns {Promise<boolean>} */
+  async function postPinsBoxActivity(sess, activity, targetChannel) {
+    const pinCh = pinsChannelForSession(sess);
+    if (!pinCh) return false;
+    await graffiti.post(
+      {
+        value: {
+          activity,
+          target: targetChannel,
+          published: Date.now(),
+        },
+        channels: [pinCh],
+        allowed: [],
+      },
+      sess,
+    );
+    return true;
+  }
+
+  /** Join message room + show under My projects (Join + Pin on private inbox). */
   async function joinProject() {
     if (!selectedChannel.value || !session.value) return false;
+    const target = selectedChannel.value;
     const pinCh = pinsChannelForSession(session.value);
     if (!pinCh) return false;
     isJoining.value = true;
@@ -689,7 +1043,7 @@ function setup() {
         {
           value: {
             activity: "Join",
-            target: selectedChannel.value,
+            target,
             published: Date.now(),
           },
           channels: [pinCh],
@@ -697,6 +1051,14 @@ function setup() {
         },
         session.value,
       );
+      try {
+        await postPinsBoxActivity(session.value, "Pin", target);
+      } catch (e2) {
+        console.error(e2);
+        window.alert(
+          "You joined the chat, but pinning to My projects failed (check the console). Find the group under All projects.",
+        );
+      }
       return true;
     } catch (e) {
       console.error(e);
@@ -835,33 +1197,39 @@ function setup() {
     }
   }
 
-  async function leaveProject() {
+  /** Only removes the group from My projects; message room unchanged (stay Joined). */
+  async function unpinFromMyProjects() {
     if (!selectedChannel.value || !session.value) return;
     const ok = window.confirm(
-      "Remove this group from your My projects list? You still have access unless the creator removes you from the access list.",
+      "Remove this group from My projects?\n\nYou stay in the chat: open it again from All projects to read or send messages. Use Pin to My projects to bring it back to your sidebar list.",
     );
     if (!ok) return;
     isLeaving.value = true;
     try {
-      const pinCh = pinsChannelForSession(session.value);
-      if (!pinCh) return;
-      await graffiti.post(
-        {
-          value: {
-            activity: "Leave",
-            target: selectedChannel.value,
-            published: Date.now(),
-          },
-          channels: [pinCh],
-          allowed: [],
-        },
-        session.value,
-      );
+      await postPinsBoxActivity(session.value, "Unpin", selectedChannel.value);
     } catch (e) {
       console.error(e);
-      window.alert("Could not update your list. See the console for details.");
+      window.alert(
+        "Could not unpin from My projects. See the console for details.",
+      );
     } finally {
       isLeaving.value = false;
+    }
+  }
+
+  async function pinToMyProjects() {
+    if (!selectedChannel.value || !session.value) return;
+    if (!joinedChannels.value.has(selectedChannel.value)) return;
+    isPinningSidebar.value = true;
+    try {
+      await postPinsBoxActivity(session.value, "Pin", selectedChannel.value);
+    } catch (e) {
+      console.error(e);
+      window.alert(
+        "Could not pin this chat to My projects. See the console for details.",
+      );
+    } finally {
+      isPinningSidebar.value = false;
     }
   }
 
@@ -904,21 +1272,24 @@ function setup() {
     });
   }
 
-  function showFakeTyping() {
-    clearTimeout(fakeTypingTimer);
-    fakeTypingVisible.value = true;
-    fakeTypingTimer = setTimeout(() => {
-      fakeTypingVisible.value = false;
-    }, 2200);
-  }
-
-  function onComposerInput() {
-    if (canSendMessages.value) showFakeTyping();
+  function openChatFromTaskSidebar(channelId) {
+    if (!channelId) return;
+    navigatingTaskChannel.value = String(channelId);
+    void router.push({
+      name: "chat-todos",
+      params: { chatId: String(channelId) },
+    });
+    setTimeout(() => {
+      if (navigatingTaskChannel.value === String(channelId)) {
+        navigatingTaskChannel.value = null;
+      }
+    }, 260);
   }
 
   return {
     session,
     listFilter,
+    showCreateGroupPanel,
     selectedChannel,
     selectedProject,
     visibleProjects,
@@ -937,31 +1308,42 @@ function setup() {
     isSendingMessage,
     isJoining,
     isLeaving,
+    isPinningSidebar,
+    navigatingTaskChannel,
     isDeletingGroup,
     isDeleting,
     isMemberOfSelected,
+    isPinnedForSelected,
     canSendMessages,
     isOnAccessListForSelected,
     isCreatorOfSelected,
     selectedAllowedActors,
     joinedChannels,
-    fakeTypingVisible,
+    pinnedChannels,
     createProject,
     sendMessage,
     joinProject,
     addMemberToGroup,
     removeActorFromAccessList,
     isRosterRowRemovable,
-    leaveProject,
+    unpinFromMyProjects,
+    pinToMyProjects,
     deleteEntireGroup,
     deleteMessage,
     selectProject,
-    onComposerInput,
     routePanel,
     selectedTodos,
+    personalCalendarEvents,
     addTodoForSelected,
     patchTodoAt,
+    patchTodoForChannel,
     removeTodoAt,
+    removeTodoForChannel,
+    addCalendarEvent,
+    patchCalendarEvent,
+    removeCalendarEvent,
+    allTodosSidebar,
+    openChatFromTaskSidebar,
     closeRoutePanel,
   };
 }
