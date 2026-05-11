@@ -39,12 +39,15 @@
 
 html {
   height: 100%;
+  height: 100dvh;
 }
 
 body {
   margin: 0;
-  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
   max-height: 100%;
+  max-height: 100dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -53,6 +56,9 @@ body {
   line-height: 1.45;
   color: var(--space-indigo);
   background: var(--seashell);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  box-sizing: border-box;
 }
 
 #app {
@@ -152,19 +158,28 @@ a:hover {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) 1fr;
+  grid-template-columns: clamp(10.5rem, 30vw, 20rem) minmax(0, 1fr);
   min-height: 0;
   align-items: stretch;
 }
 
 .layout > * {
   min-height: 0;
+  min-width: 0;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 880px) {
   .layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 42vh) minmax(0, 1fr);
+    grid-template-rows: minmax(0, min(42vh, 16rem)) minmax(0, 1fr);
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-width: 880px) {
+    .layout {
+      grid-template-rows: minmax(0, min(42dvh, 16rem)) minmax(0, 1fr);
+    }
   }
 }
 
@@ -179,11 +194,19 @@ a:hover {
   overflow: hidden;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 880px) {
   .sidebar {
     border-right: none;
     border-bottom: 1px solid var(--almond-silk);
-    max-height: 42vh;
+    max-height: min(42vh, 16rem);
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-width: 880px) {
+    .sidebar {
+      max-height: min(42dvh, 16rem);
+    }
   }
 }
 
@@ -514,7 +537,7 @@ button.roster-remove {
 
 .add-member-row input {
   flex: 1;
-  min-width: 12rem;
+  min-width: min(12rem, 100%);
   padding: 0.45rem 0.6rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--almond-silk);
@@ -617,6 +640,7 @@ button.roster-remove {
 
 .composer textarea {
   flex: 1;
+  min-width: 0;
   min-height: 2.75rem;
   max-height: 8rem;
   resize: vertical;
@@ -789,6 +813,15 @@ a.btn-sm {
   font-size: 0.82rem;
 }
 
+/* After .btn-sm: must beat `button.btn-sm` specificity so size changes apply */
+.msg-actions button.msg-remove-btn.btn-danger {
+  padding: 0.08rem 0.28rem;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  border-radius: 5px;
+  font-weight: 600;
+}
+
 .thread-route-btn {
   transition:
     background-color 0.16s ease,
@@ -871,13 +904,33 @@ a.btn-sm {
 }
 
 .route-panel {
+  --route-panel-pad: max(0.65rem, env(safe-area-inset-top, 0px));
   position: fixed;
   z-index: 81;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(26rem, calc(100% - 2rem));
-  max-height: min(85vh, 34rem);
+  top: var(--route-panel-pad);
+  transform: translateX(-50%);
+  width: min(
+    26rem,
+    calc(
+      100vw - 1.25rem - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  max-height: min(
+    34rem,
+    calc(
+      100vh - 1.25rem - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    )
+  );
+  max-height: min(
+    34rem,
+    calc(
+      100dvh - 1.25rem - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    )
+  );
   overflow: auto;
   padding: 1.25rem 1.35rem;
   background: var(--surface);
@@ -887,13 +940,51 @@ a.btn-sm {
 }
 
 .route-panel-calendar {
-  width: min(54rem, calc(100% - 1.25rem));
-  max-height: min(90vh, 46rem);
+  width: min(
+    54rem,
+    calc(
+      100vw - 1.25rem - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  max-height: min(
+    46rem,
+    calc(
+      100vh - 1.25rem - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    )
+  );
+  max-height: min(
+    46rem,
+    calc(
+      100dvh - 1.25rem - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    )
+  );
 }
 
 .route-panel.route-panel-todo {
-  width: min(46rem, calc(100% - 1.25rem));
-  max-height: min(90vh, 44rem);
+  width: min(
+    46rem,
+    calc(
+      100vw - 1.25rem - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  max-height: min(
+    44rem,
+    calc(
+      100vh - 1.25rem - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    )
+  );
+  max-height: min(
+    44rem,
+    calc(
+      100dvh - 1.25rem - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    )
+  );
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -903,6 +994,17 @@ a.btn-sm {
 
 .route-panel.route-panel-todo .route-panel-header {
   flex-shrink: 0;
+}
+
+.todo-panel-feedback {
+  margin: 0 0 0.65rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--space-indigo);
+  background: color-mix(in srgb, #2d6a4f 12%, var(--surface));
+  border: 1px solid rgb(45 106 79 / 0.28);
+  border-radius: var(--radius-sm);
 }
 
 .route-panel-header {
@@ -920,6 +1022,23 @@ a.btn-sm {
 
 .route-panel-close {
   flex-shrink: 0;
+}
+
+.route-panel .route-panel-close.btn-ghost {
+  color: var(--dusty-grape);
+  border-color: rgb(34 34 59 / 0.35);
+}
+
+.route-panel .route-panel-close.btn-ghost:hover {
+  color: var(--space-indigo);
+  border-color: rgb(34 34 59 / 0.5);
+  background: rgb(34 34 59 / 0.06);
+}
+
+.route-panel .route-panel-close.btn-ghost:focus-visible {
+  color: var(--space-indigo);
+  outline: 2px solid var(--dusty-grape);
+  outline-offset: 2px;
 }
 
 .route-panel-hint {
@@ -1027,13 +1146,23 @@ a.btn-sm {
 
 .todo-footer {
   flex-shrink: 0;
+  display: flex;
+  justify-content: center;
   padding-top: 0.8rem;
   margin-top: 0.35rem;
   border-top: 1px solid rgb(74 78 105 / 0.12);
 }
 
 .todo-add-btn {
-  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.55rem;
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 600;
 }
 
 .todo-empty {
@@ -1062,7 +1191,7 @@ a.btn-sm {
 
 .calendar-app-row input[type="text"] {
   flex: 1 1 16rem;
-  min-width: 11rem;
+  min-width: min(11rem, 100%);
   padding: 0.5rem 0.65rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--almond-silk);
@@ -1087,6 +1216,7 @@ a.btn-sm {
 .calendar-month-nav {
   margin-top: 0.7rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.45rem;
 }
@@ -1170,10 +1300,30 @@ a.btn-sm {
   font-weight: 600;
 }
 
-.calendar-day-count {
-  font-size: 0.66rem;
+.calendar-day-previews {
+  display: flex;
+  flex-direction: column;
+  gap: 0.06rem;
+  min-width: 0;
+  width: 100%;
+  margin-top: auto;
+  text-align: left;
+}
+
+.calendar-day-preview-line {
+  font-size: 0.6rem;
+  font-weight: 500;
   color: var(--dusty-grape);
-  line-height: 1.25;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-day-preview-more {
+  font-size: 0.56rem;
+  color: var(--lilac-ash);
+  font-weight: 600;
 }
 
 .calendar-selected-day {
@@ -1243,4 +1393,91 @@ a.btn-sm {
 
 .calendar-app-empty .hint {
   margin-top: 0.45rem;
+}
+
+/* —— Narrow / small screens —— */
+@media (max-width: 36rem) {
+  .app-header {
+    padding: 0.65rem clamp(0.65rem, 3vw, 1.25rem);
+  }
+
+  .thread-header {
+    padding: 0.65rem clamp(0.65rem, 3vw, 1.25rem);
+  }
+
+  .messages {
+    padding: 0.75rem clamp(0.65rem, 3vw, 1.1rem);
+  }
+
+  .composer {
+    padding: 0.65rem clamp(0.65rem, 3vw, 1rem) max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .bubble-row {
+    max-width: min(100%, 34rem);
+  }
+
+  .calendar-event-row {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .calendar-event-preview {
+    display: none;
+  }
+
+  .calendar-event-remove {
+    justify-self: start;
+  }
+
+  .todo-col-head {
+    display: none;
+  }
+
+  .todo-row {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto auto;
+    align-items: center;
+    gap: 0.45rem 0.5rem;
+  }
+
+  .todo-check-wrap {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: start;
+    padding-top: 0.15rem;
+  }
+
+  .todo-title-field {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .todo-due-field {
+    grid-column: 2;
+    grid-row: 2;
+    max-width: 100%;
+  }
+
+  .todo-delete-btn {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 22rem) {
+  .calendar-day-cell {
+    min-height: 3.5rem;
+    padding: 0.25rem 0.2rem 0.2rem;
+  }
+
+  .calendar-day-num {
+    font-size: 0.72rem;
+  }
+
+  .tabs-three button {
+    font-size: 0.72rem;
+    padding: 0.38rem 0.22rem;
+  }
 }

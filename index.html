@@ -2,8 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Class project groups</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Class Projects Groupchats</title>
     <script type="importmap">
       {
         "imports": {
@@ -111,11 +114,7 @@
                 </template>
               </div>
 
-              <ul
-                v-if="listFilter !== 'tasks'"
-                class="chat-list"
-                role="list"
-              >
+              <ul v-if="listFilter !== 'tasks'" class="chat-list" role="list">
                 <li v-for="p of visibleProjects" :key="p.value.channel">
                   <button
                     type="button"
@@ -132,11 +131,7 @@
                   </button>
                 </li>
               </ul>
-              <ul
-                v-else
-                class="tasks-sidebar-list"
-                role="list"
-              >
+              <ul v-else class="tasks-sidebar-list" role="list">
                 <li
                   v-for="row in allTodosSidebar"
                   :key="row.task.id + '-' + row.channel"
@@ -160,10 +155,9 @@
                         :class="{ 'is-done': row.task.completed }"
                         >{{ row.task.title || "(No title)" }}</span
                       >
-                      <span
-                        v-if="row.task.due"
-                        class="tasks-sidebar-due"
-                      >Due {{ row.task.due }}</span>
+                      <span v-if="row.task.due" class="tasks-sidebar-due"
+                        >Due {{ row.task.due }}</span
+                      >
                     </div>
                     <button
                       type="button"
@@ -173,11 +167,8 @@
                       title="Open chat"
                       @click="openChatFromTaskSidebar(row.channel)"
                     >
-                      {{
-                        navigatingTaskChannel === row.channel
-                          ? "Opening…"
-                          : "Open"
-                      }}
+                      {{ navigatingTaskChannel === row.channel ? "Opening…" :
+                      "Open" }}
                     </button>
                     <button
                       type="button"
@@ -241,58 +232,59 @@
                 id="create-group-panel"
                 class="panel panel-create-group"
               >
-              <div class="panel-create-header">
-                <h3>Start a new group</h3>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-secondary panel-create-cancel"
-                  @click="showCreateGroupPanel = false"
-                >
-                  Cancel
-                </button>
-              </div>
-              <form @submit.prevent="createProject()">
-                <label for="proj-title">Project name</label>
-                <input
-                  id="proj-title"
-                  v-model="newTitle"
-                  type="text"
-                  autocomplete="off"
-                  placeholder="e.g. HW10 collision branch"
-                  required
-                />
-                <label for="proj-course">Class</label>
-                <input
-                  id="proj-course"
-                  v-model="newCourse"
-                  type="text"
-                  autocomplete="off"
-                  placeholder="6.4500"
-                />
-                <label for="proj-members">Who can see this group</label>
-                <p class="hint" id="members-hint">
-                  One person per line: a <strong>handle</strong> like
-                  <code>friend.graffiti.actor</code>, or a short name
-                  <code>friend</code> (we append <code>.graffiti.actor</code>),
-                  or a full <code>did:plc:…</code> id (letter
-                  <strong>l</strong> as in “PLC”, not “place”). Listed accounts
-                  can discover the group; they still use
-                  <strong>Join project chat</strong> to load messages.
-                </p>
-                <textarea
-                  id="proj-members"
-                  v-model="newMembersRaw"
-                  aria-describedby="members-hint"
-                  placeholder="friend.graffiti.actor"
-                ></textarea>
-                <button
-                  type="submit"
-                  class="btn"
-                  :disabled="!newTitle.trim() || isCreatingProject"
-                >
-                  {{ isCreatingProject ? "Creating…" : "Create group" }}
-                </button>
-              </form>
+                <div class="panel-create-header">
+                  <h3>Start a new group</h3>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-secondary panel-create-cancel"
+                    @click="showCreateGroupPanel = false"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <form @submit.prevent="createProject()">
+                  <label for="proj-title">Project name</label>
+                  <input
+                    id="proj-title"
+                    v-model="newTitle"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="e.g. HW10 collision branch"
+                    required
+                  />
+                  <label for="proj-course">Class</label>
+                  <input
+                    id="proj-course"
+                    v-model="newCourse"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="6.4500"
+                  />
+                  <label for="proj-members">Who can see this group</label>
+                  <p class="hint" id="members-hint">
+                    One person per line: a <strong>handle</strong> like
+                    <code>friend.graffiti.actor</code>, or a short name
+                    <code>friend</code> (we append
+                    <code>.graffiti.actor</code>), or a full
+                    <code>did:plc:…</code> id (letter <strong>l</strong> as in
+                    “PLC”, not “place”). Listed accounts can discover the group;
+                    they still use <strong>Join project chat</strong> to load
+                    messages.
+                  </p>
+                  <textarea
+                    id="proj-members"
+                    v-model="newMembersRaw"
+                    aria-describedby="members-hint"
+                    placeholder="friend.graffiti.actor"
+                  ></textarea>
+                  <button
+                    type="submit"
+                    class="btn"
+                    :disabled="!newTitle.trim() || isCreatingProject"
+                  >
+                    {{ isCreatingProject ? "Creating…" : "Create group" }}
+                  </button>
+                </form>
               </div>
             </transition>
           </aside>
@@ -384,11 +376,7 @@
                       :disabled="isPinningSidebar"
                       @click="pinToMyProjects()"
                     >
-                      {{
-                        isPinningSidebar
-                          ? "Pinning…"
-                          : "Pin to My projects"
-                      }}
+                      {{ isPinningSidebar ? "Pinning…" : "Pin to My projects" }}
                     </button>
                     <button
                       v-if="selectedProject && isCreatorOfSelected"
@@ -527,14 +515,15 @@
                       >
                         <button
                           type="button"
-                          class="btn btn-danger btn-sm"
+                          class="btn btn-danger btn-sm msg-remove-btn"
+                          aria-label="Remove message"
                           :disabled="isDeleting.has(m.url)"
                           @click="deleteMessage(m)"
                         >
                           <template v-if="isDeleting.has(m.url)"
                             >Removing…</template
                           >
-                          <template v-else>Remove message</template>
+                          <template v-else>Remove</template>
                         </button>
                       </div>
                     </div>
@@ -608,6 +597,14 @@
           panel-class="route-panel-todo"
           @close="closeRoutePanel()"
         >
+          <p
+            v-if="todoPanelFeedback"
+            class="todo-panel-feedback"
+            role="status"
+            aria-live="polite"
+          >
+            {{ todoPanelFeedback }}
+          </p>
           <todo-panel
             :items="selectedTodos"
             @add="addTodoForSelected()"

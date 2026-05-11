@@ -65,12 +65,23 @@
       'is-today': cell.isToday,
       'is-selected': cell.isSelected,
     }"
+    :aria-label="dayCellAriaLabel(cell)"
     @click="selectDate(cell.key)"
   >
     <span class="calendar-day-num">{{ cell.day }}</span>
-    <span v-if="cell.events.length" class="calendar-day-count">
-      {{ cell.events.length }} task{{ cell.events.length > 1 ? "s" : "" }}
-    </span>
+    <div v-if="cell.events.length" class="calendar-day-previews">
+      <span
+        v-for="(ev, j) in cell.events.slice(0, 3)"
+        :key="ev.id + '-' + j"
+        class="calendar-day-preview-line"
+        :title="ev.title || 'Untitled'"
+      >
+        {{ previewTitle(ev.title) }}
+      </span>
+      <span v-if="cell.events.length > 3" class="calendar-day-preview-more">
+        +{{ cell.events.length - 3 }} more
+      </span>
+    </div>
   </button>
 </div>
 

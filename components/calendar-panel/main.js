@@ -142,6 +142,28 @@ export default async () => ({
       return new Date(`${value}T00:00:00`).toLocaleDateString();
     }
 
+    /** Short label for month grid cells (full text in tooltip via title). */
+    function previewTitle(raw) {
+      const t = String(raw ?? "").trim() || "Untitled";
+      const max = 22;
+      if (t.length <= max) return t;
+      return `${t.slice(0, max - 1)}…`;
+    }
+
+    function dayCellAriaLabel(cell) {
+      const bits = [String(cell.day)];
+      if (cell.isToday) bits.push("today");
+      if (!cell.inMonth) bits.push("outside this month");
+      if (cell.events.length) {
+        const titles = cell.events.map((e) => {
+          const t = String(e?.title ?? "").trim();
+          return t || "Untitled";
+        });
+        bits.push(`${titles.length} event${titles.length > 1 ? "s" : ""}: ${titles.join("; ")}`);
+      }
+      return bits.join(", ");
+    }
+
     return {
       weekdayLabels,
       monthOptions,
@@ -155,6 +177,8 @@ export default async () => ({
       newEventDate,
       addEvent,
       formatDate,
+      previewTitle,
+      dayCellAriaLabel,
       prevMonth,
       nextMonth,
       goToToday,

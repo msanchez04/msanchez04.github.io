@@ -205,6 +205,28 @@ function setup() {
   const navigatingTaskChannel = ref(null);
   const isDeletingGroup = ref(false);
   const isDeleting = ref(new Set());
+  const todoPanelFeedback = ref("");
+  let todoPanelFeedbackTimer = 0;
+
+  function showTodoPanelFeedback(message, ms = 2800) {
+    if (todoPanelFeedbackTimer) {
+      clearTimeout(todoPanelFeedbackTimer);
+      todoPanelFeedbackTimer = 0;
+    }
+    todoPanelFeedback.value = message;
+    todoPanelFeedbackTimer = window.setTimeout(() => {
+      todoPanelFeedback.value = "";
+      todoPanelFeedbackTimer = 0;
+    }, ms);
+  }
+
+  function clearTodoPanelFeedback() {
+    if (todoPanelFeedbackTimer) {
+      clearTimeout(todoPanelFeedbackTimer);
+      todoPanelFeedbackTimer = 0;
+    }
+    todoPanelFeedback.value = "";
+  }
 
   /**
    * While the directory row is delete-then-reposted (ACL edit), discover briefly
@@ -306,6 +328,10 @@ function setup() {
       completed: false,
       syncedCalendarEventId: null,
     });
+    showTodoPanelFeedback(
+      "Task saved. Syncs to your in-app calendar when you add a title and due date.",
+      4000,
+    );
   }
 
   function sortCalendarEvents() {
@@ -558,6 +584,7 @@ function setup() {
   }
 
   function closeRoutePanel() {
+    clearTodoPanelFeedback();
     const ch = selectedChannel.value ?? route.params.chatId;
     if (ch) {
       void router.push({ name: "chat", params: { chatId: String(ch) } });
@@ -1345,6 +1372,7 @@ function setup() {
     allTodosSidebar,
     openChatFromTaskSidebar,
     closeRoutePanel,
+    todoPanelFeedback,
   };
 }
 

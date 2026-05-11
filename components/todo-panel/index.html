@@ -21,8 +21,13 @@
     <p v-if="!items.length" class="hint todo-empty">No tasks yet. Add one below.</p>
   </div>
   <div class="todo-footer">
-    <button type="button" class="btn btn-secondary todo-add-btn" @click="$emit('add')">
-      Add new task
+    <button
+      type="button"
+      class="btn btn-secondary todo-add-btn"
+      aria-label="Add new task"
+      @click="$emit('add')"
+    >
+      +
     </button>
   </div>
 </div>
